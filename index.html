@@ -658,9 +658,19 @@
     setTimeout(() => flash.classList.remove('show'), 120);
   }
 
-  // ─── Delimiter split ───
-  function split(s) {
-    return s.split(/[\s,\t\n;|]+/).filter(t => t.length > 0);
+  // ─── フィールド抽出（カンマ区切りQRデータの4番目を取得） ───
+  // 例: "2605110775,21A00157U2,20260511330,PGKM1250XA/C1,1311,..."
+  //      → 4番目（インデックス3）の "PGKM1250XA/C1" を品番として抽出
+  const TARGET_FIELD_INDEX = 3;
+
+  function extractField(s) {
+    const raw = (s || '').trim();
+    const fields = raw.split(',').map(f => f.trim());
+    if (fields.length > TARGET_FIELD_INDEX && fields[TARGET_FIELD_INDEX]) {
+      return fields[TARGET_FIELD_INDEX];
+    }
+    // フィールド数が足りない場合は全体を返す（読み取り不良時のフォールバック）
+    return raw;
   }
 
   function escapeHtml(s) {
@@ -723,9 +733,12 @@
   });
 
   // ─── Step handlers ───
+  let partNoA = '';  // データAから抽出した品番（PGKM1250XA/C1など）
+
   function handleA(val) {
     if (step !== 1) return;
     valueA = val;
+    partNoA = extractField(val);
     step = 2;
 
     cardA.classList.remove('active');
@@ -738,7 +751,7 @@
 
     stepBadge.textContent = 'STEP 2 / 2';
     setResult('pending', '待機中', '⏳');
-    statusBar.textContent = 'データBをスキャンしてください';
+    statusBar.textContent = `データBをスキャンしてください（品番: ${partNoA}）`;
     vibrate(30);
   }
 
@@ -751,16 +764,13 @@
     cardB.classList.add('filled');
     stepBadge.textContent = 'DONE';
 
-    const tokA = split(valueA);
-    const tokB = split(val);
-    const unmatched = tokA.filter(t => !tokB.includes(t));
-    const matched   = tokA.filter(t =>  tokB.includes(t));
-    const isOK = unmatched.length === 0 && tokA.length > 0;
+    const partNoB = extractField(val);
+    const isOK = partNoA.length > 0 && partNoA === partNoB;
 
     if (isOK) {
       setResult('ok', 'OK', '✓');
       matchDetail.className = 'match-detail ok';
-      matchDetail.textContent = '✓ 一致：' + matched.join(' / ');
+      matchDetail.textContent = `✓ 品番一致：${partNoA}`;
       soundOK();
       doFlash('ok');
       vibrate([60, 40, 60]);
@@ -768,12 +778,10 @@
     } else {
       setResult('ng', 'NG', '✗');
       matchDetail.className = 'match-detail ng';
-      if (unmatched.length) {
-        matchDetail.innerHTML = '✗ 不一致の品番<br>' +
-          unmatched.map(t => `<span class="ng-token">${escapeHtml(t)}</span>`).join(' ');
-      } else {
-        matchDetail.textContent = '⚠ データAが空です';
-      }
+      matchDetail.innerHTML =
+        `✗ 品番不一致<br>` +
+        `データA: <span class="ng-token">${escapeHtml(partNoA || '(空)')}</span><br>` +
+        `データB: <span class="ng-token">${escapeHtml(partNoB || '(空)')}</span>`;
       soundNG();
       doFlash('ng');
       vibrate([80, 50, 80, 50, 80]);
@@ -796,7 +804,7 @@
 
   // ─── Reset ───
   function autoReset() {
-    step = 1; valueA = ''; scanBuffer = '';
+    step = 1; valueA = ''; partNoA = ''; scanBuffer = '';
     clearTimeout(bufTimer); clearTimeout(autoTimer);
 
     elA.value = ''; elB.value = '';
