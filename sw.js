@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barcode-partno-v1';
+const CACHE_NAME = 'barcode-mode-toggle-v1';
 const ASSETS = [
   './',
   './index.html',

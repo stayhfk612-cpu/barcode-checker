@@ -99,6 +99,50 @@
       gap: 14px;
     }
 
+    /* ─── Mode toggle ─── */
+    .mode-toggle {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .mode-btn {
+      flex: 1;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 8px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mode-btn-sub {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: var(--muted);
+      opacity: 0.85;
+    }
+    .mode-btn.active {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.08);
+      color: var(--accent);
+    }
+    .mode-btn.active .mode-btn-sub { color: var(--accent); opacity: 0.75; }
+    .mode-btn:active { transform: scale(0.97); }
+    .mode-toggle.locked .mode-btn {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
     /* ─── Result panel (hero) ─── */
     .result-panel {
       border-radius: var(--card-r);
@@ -494,6 +538,18 @@
   <!-- Main -->
   <main class="main">
 
+    <!-- Mode toggle -->
+    <div class="mode-toggle" id="modeToggle">
+      <button class="mode-btn active" id="modeBtnPart" onclick="setMode('part')" type="button">
+        品番抽出照合
+        <span class="mode-btn-sub">4番目の項目だけを比較</span>
+      </button>
+      <button class="mode-btn" id="modeBtnFull" onclick="setMode('full')" type="button">
+        全体照合
+        <span class="mode-btn-sub">区切り文字で分割して比較</span>
+      </button>
+    </div>
+
     <!-- Result hero -->
     <div class="result-panel" id="resultPanel">
       <div>
@@ -586,6 +642,9 @@
   const statusBar  = document.getElementById('statusBar');
   const hintB      = document.getElementById('hintB');
   const resetBtn   = document.getElementById('resetBtn');
+  const modeToggle = document.getElementById('modeToggle');
+  const modeBtnPart= document.getElementById('modeBtnPart');
+  const modeBtnFull= document.getElementById('modeBtnFull');
   const camBtnA    = document.getElementById('camBtnA');
   const camBtnB    = document.getElementById('camBtnB');
   const camModal   = document.getElementById('camModal');
@@ -658,6 +717,21 @@
     setTimeout(() => flash.classList.remove('show'), 120);
   }
 
+  // ─── 照合モード ───
+  // 'part' : QRデータのうち決まった位置（4番目のフィールド）だけを抽出して比較
+  // 'full' : 全体を区切り文字で分割し、データAの全要素がデータBに含まれるか比較
+  let compareMode = 'part';
+
+  function setMode(mode) {
+    if (step !== 1) return; // データA待機中のみ切替可能（途中での切替は事故防止のため禁止）
+    compareMode = mode;
+    modeBtnPart.classList.toggle('active', mode === 'part');
+    modeBtnFull.classList.toggle('active', mode === 'full');
+    statusBar.textContent = mode === 'part'
+      ? 'データAをスキャンしてください（品番抽出照合モード）'
+      : 'データAをスキャンしてください（全体照合モード）';
+  }
+
   // ─── フィールド抽出（カンマ区切りQRデータの4番目を取得） ───
   // 例: "2605110775,21A00157U2,20260511330,PGKM1250XA/C1,1311,..."
   //      → 4番目（インデックス3）の "PGKM1250XA/C1" を品番として抽出
@@ -671,6 +745,11 @@
     }
     // フィールド数が足りない場合は全体を返す（読み取り不良時のフォールバック）
     return raw;
+  }
+
+  // ─── Delimiter split（全体照合モード用） ───
+  function split(s) {
+    return s.split(/[\s,\t\n;|]+/).filter(t => t.length > 0);
   }
 
   function escapeHtml(s) {
@@ -733,13 +812,15 @@
   });
 
   // ─── Step handlers ───
-  let partNoA = '';  // データAから抽出した品番（PGKM1250XA/C1など）
+  let partNoA = '';  // 'part'モード：データAから抽出した品番（PGKM1250XA/C1など）
 
   function handleA(val) {
     if (step !== 1) return;
     valueA = val;
     partNoA = extractField(val);
     step = 2;
+
+    modeToggle.classList.add('locked'); // 照合中はモード切替を禁止
 
     cardA.classList.remove('active');
     cardA.classList.add('filled');
@@ -751,7 +832,9 @@
 
     stepBadge.textContent = 'STEP 2 / 2';
     setResult('pending', '待機中', '⏳');
-    statusBar.textContent = `データBをスキャンしてください（品番: ${partNoA}）`;
+    statusBar.textContent = compareMode === 'part'
+      ? `データBをスキャンしてください（品番: ${partNoA}）`
+      : 'データBをスキャンしてください';
     vibrate(30);
   }
 
@@ -764,24 +847,55 @@
     cardB.classList.add('filled');
     stepBadge.textContent = 'DONE';
 
-    const partNoB = extractField(val);
-    const isOK = partNoA.length > 0 && partNoA === partNoB;
+    let isOK;
+
+    if (compareMode === 'part') {
+      // ─── 品番抽出照合：決まった位置の項目だけを厳密一致で比較 ───
+      const partNoB = extractField(val);
+      isOK = partNoA.length > 0 && partNoA === partNoB;
+
+      if (isOK) {
+        setResult('ok', 'OK', '✓');
+        matchDetail.className = 'match-detail ok';
+        matchDetail.textContent = `✓ 品番一致：${partNoA}`;
+      } else {
+        setResult('ng', 'NG', '✗');
+        matchDetail.className = 'match-detail ng';
+        matchDetail.innerHTML =
+          `✗ 品番不一致<br>` +
+          `データA: <span class="ng-token">${escapeHtml(partNoA || '(空)')}</span><br>` +
+          `データB: <span class="ng-token">${escapeHtml(partNoB || '(空)')}</span>`;
+      }
+    } else {
+      // ─── 全体照合：区切り文字で分割し、データAの全要素がデータBに含まれるか ───
+      const tokA = split(valueA);
+      const tokB = split(val);
+      const unmatched = tokA.filter(t => !tokB.includes(t));
+      const matched   = tokA.filter(t =>  tokB.includes(t));
+      isOK = unmatched.length === 0 && tokA.length > 0;
+
+      if (isOK) {
+        setResult('ok', 'OK', '✓');
+        matchDetail.className = 'match-detail ok';
+        matchDetail.textContent = '✓ 一致：' + matched.join(' / ');
+      } else {
+        setResult('ng', 'NG', '✗');
+        matchDetail.className = 'match-detail ng';
+        if (unmatched.length) {
+          matchDetail.innerHTML = '✗ 不一致の要素<br>' +
+            unmatched.map(t => `<span class="ng-token">${escapeHtml(t)}</span>`).join(' ');
+        } else {
+          matchDetail.textContent = '⚠ データAが空です';
+        }
+      }
+    }
 
     if (isOK) {
-      setResult('ok', 'OK', '✓');
-      matchDetail.className = 'match-detail ok';
-      matchDetail.textContent = `✓ 品番一致：${partNoA}`;
       soundOK();
       doFlash('ok');
       vibrate([60, 40, 60]);
       statusBar.textContent = '一致しました';
     } else {
-      setResult('ng', 'NG', '✗');
-      matchDetail.className = 'match-detail ng';
-      matchDetail.innerHTML =
-        `✗ 品番不一致<br>` +
-        `データA: <span class="ng-token">${escapeHtml(partNoA || '(空)')}</span><br>` +
-        `データB: <span class="ng-token">${escapeHtml(partNoB || '(空)')}</span>`;
       soundNG();
       doFlash('ng');
       vibrate([80, 50, 80, 50, 80]);
@@ -819,9 +933,12 @@
     matchDetail.className = 'match-detail';
     setResult('', '待機中', '⏳');
     resetBtn.classList.remove('urgent');
+    modeToggle.classList.remove('locked');
 
     stepBadge.textContent = 'STEP 1 / 2';
-    statusBar.textContent = 'データAをスキャンしてください';
+    statusBar.textContent = compareMode === 'part'
+      ? 'データAをスキャンしてください（品番抽出照合モード）'
+      : 'データAをスキャンしてください（全体照合モード）';
     elA.focus();
   }
 
@@ -1041,7 +1158,9 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then(() => {
-        statusBar.textContent = 'データAをスキャンしてください';
+        statusBar.textContent = compareMode === 'part'
+          ? 'データAをスキャンしてください（品番抽出照合モード）'
+          : 'データAをスキャンしてください（全体照合モード）';
       }).catch(() => {});
     });
   }
