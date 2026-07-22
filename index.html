@@ -590,7 +590,7 @@
           カメラ
         </button>
       </div>
-      <input class="scan-input" id="dataA" type="text" inputmode="none"
+      <input class="scan-input" id="dataA" type="text" inputmode="none" readonly
              placeholder="スキャンしてください" autocomplete="off"
              autocorrect="off" spellcheck="false">
       <div class="scan-hint"><span class="pulse"></span>スキャン待機中</div>
@@ -608,7 +608,7 @@
           カメラ
         </button>
       </div>
-      <input class="scan-input" id="dataB" type="text" inputmode="none"
+      <input class="scan-input" id="dataB" type="text" inputmode="none" readonly
              placeholder="データAのスキャン後に有効になります" autocomplete="off"
              autocorrect="off" spellcheck="false" disabled>
       <div class="scan-hint" id="hintB" style="display:none"><span class="pulse"></span>スキャン待機中</div>
@@ -844,7 +844,7 @@
     elB.disabled = false;
     camBtnB.disabled = false;
     hintB.style.display = 'flex';
-    elB.focus();
+    // フォーカスは当てない（キーボード表示・自動スクロール防止）。スキャンは画面全体で受信。
 
     stepBadge.textContent = 'STEP 2 / 2';
     setResult('pending', '待機中', '⏳');
@@ -955,7 +955,7 @@
     statusBar.textContent = compareMode === 'part'
       ? 'データAをスキャンしてください（品番抽出照合モード）'
       : 'データAをスキャンしてください（全体照合モード）';
-    elA.focus();
+    // フォーカスは当てない（キーボード表示・自動スクロール防止）
   }
 
   function clearAll() {
@@ -1202,8 +1202,8 @@
   document.addEventListener('touchstart', ensureAudio, { once: true });
   document.addEventListener('click',      ensureAudio, { once: true });
 
-  // Focus A on load
-  window.addEventListener('load', () => { elA.focus(); });
+  // Focus is intentionally NOT set on load (prevents soft keyboard & auto-scroll).
+  // Scans are captured globally via the document keypress listener above.
 </script>
 </body>
 </html>
