@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -44,6 +44,8 @@
     .app {
       display: flex;
       flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; right: 0;
       height: 100dvh;
       height: 100vh; /* fallback */
       padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
@@ -97,6 +99,16 @@
       display: flex;
       flex-direction: column;
       gap: 7px;
+    }
+
+    /* ─── Pinned hero (常に最上部に固定) ─── */
+    .hero-fixed {
+      flex-shrink: 0;
+      padding: 8px 11px 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--bg);
     }
 
     /* ─── Mode toggle ─── */
@@ -536,6 +548,21 @@
     <div class="step-badge" id="stepBadge">STEP 1 / 2</div>
   </header>
 
+  <!-- Pinned hero: キーボードが出ても常に見える最上部 -->
+  <div class="hero-fixed">
+    <!-- Result hero -->
+    <div class="result-panel" id="resultPanel">
+      <div>
+        <div class="result-label">照合結果</div>
+        <div class="result-value" id="resultValue">待機中</div>
+      </div>
+      <div class="result-icon-wrap" id="resultIcon">⏳</div>
+    </div>
+
+    <!-- Match detail -->
+    <div class="match-detail" id="matchDetail"></div>
+  </div>
+
   <!-- Main -->
   <main class="main">
 
@@ -550,18 +577,6 @@
         <span class="mode-btn-sub">区切り文字で分割して比較</span>
       </button>
     </div>
-
-    <!-- Result hero -->
-    <div class="result-panel" id="resultPanel">
-      <div>
-        <div class="result-label">照合結果</div>
-        <div class="result-value" id="resultValue">待機中</div>
-      </div>
-      <div class="result-icon-wrap" id="resultIcon">⏳</div>
-    </div>
-
-    <!-- Match detail -->
-    <div class="match-detail" id="matchDetail"></div>
 
     <!-- Input A -->
     <div class="input-card active" id="cardA">
@@ -1165,6 +1180,23 @@
       }).catch(() => {});
     });
   }
+
+  // ─── ソフトキーボード対応 ───
+  // キーボードが出ると表示領域が縮む。app高さを可視領域に合わせることで、
+  // 上部の照合結果と最下部のリセットボタンが常に画面内に残るようにする。
+  const appEl = document.querySelector('.app');
+  function fitToViewport() {
+    const vv = window.visualViewport;
+    if (!vv || !appEl) return;
+    appEl.style.height = vv.height + 'px';
+    appEl.style.transform = `translateY(${vv.offsetTop}px)`;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitToViewport);
+    window.visualViewport.addEventListener('scroll', fitToViewport);
+  }
+  window.addEventListener('load', fitToViewport);
+  window.addEventListener('orientationchange', () => setTimeout(fitToViewport, 300));
 
   // Ensure audio on first touch
   document.addEventListener('touchstart', ensureAudio, { once: true });
