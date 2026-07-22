@@ -80,6 +80,15 @@
       letter-spacing: 0.02em;
       color: var(--text);
     }
+    .build-tag {
+      font-size: 7px;
+      font-weight: 600;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 5px;
+      letter-spacing: 0.03em;
+    }
     .step-badge {
       font-size: 7.5px;
       font-weight: 600;
@@ -544,6 +553,7 @@
     <div class="header-title">
       <div class="header-icon">📋</div>
       <h1>Barcode-Checker</h1>
+      <span class="build-tag" id="buildTag">build&nbsp;7</span>
     </div>
     <div class="step-badge" id="stepBadge">STEP 1 / 2</div>
   </header>
@@ -590,7 +600,7 @@
           カメラ
         </button>
       </div>
-      <input class="scan-input" id="dataA" type="text" inputmode="none" readonly
+      <input class="scan-input" id="dataA" type="text" inputmode="none"
              placeholder="スキャンしてください" autocomplete="off"
              autocorrect="off" spellcheck="false">
       <div class="scan-hint"><span class="pulse"></span>スキャン待機中</div>
@@ -608,7 +618,7 @@
           カメラ
         </button>
       </div>
-      <input class="scan-input" id="dataB" type="text" inputmode="none" readonly
+      <input class="scan-input" id="dataB" type="text" inputmode="none"
              placeholder="データAのスキャン後に有効になります" autocomplete="off"
              autocorrect="off" spellcheck="false" disabled>
       <div class="scan-hint" id="hintB" style="display:none"><span class="pulse"></span>スキャン待機中</div>
@@ -844,7 +854,7 @@
     elB.disabled = false;
     camBtnB.disabled = false;
     hintB.style.display = 'flex';
-    // フォーカスは当てない（キーボード表示・自動スクロール防止）。スキャンは画面全体で受信。
+    elB.focus(); // データB欄へフォーカス（スキャナー入力を受け取るため）
 
     stepBadge.textContent = 'STEP 2 / 2';
     setResult('pending', '待機中', '⏳');
@@ -955,7 +965,7 @@
     statusBar.textContent = compareMode === 'part'
       ? 'データAをスキャンしてください（品番抽出照合モード）'
       : 'データAをスキャンしてください（全体照合モード）';
-    // フォーカスは当てない（キーボード表示・自動スクロール防止）
+    elA.focus(); // 次のスキャンに備えてデータA欄へフォーカス
   }
 
   function clearAll() {
@@ -1171,9 +1181,28 @@
   };
 
 
+  // ─── Service Worker：古いキャッシュを掴み続けないよう、常に最新へ更新 ───
   if ('serviceWorker' in navigator) {
+    let reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadedForUpdate) return;
+      reloadedForUpdate = true;
+      window.location.reload(); // 新しいSWが制御を握ったら一度だけ再読み込み
+    });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').then(() => {
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        reg.update();
+        // 待機中の新バージョンがあれば即時反映を試みる
+        if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && reg.waiting) {
+              reg.waiting.postMessage('skipWaiting');
+            }
+          });
+        });
         statusBar.textContent = compareMode === 'part'
           ? 'データAをスキャンしてください（品番抽出照合モード）'
           : 'データAをスキャンしてください（全体照合モード）';
@@ -1182,28 +1211,30 @@
   }
 
   // ─── ソフトキーボード対応 ───
-  // キーボードが出ると表示領域が縮む。app高さを可視領域に合わせることで、
-  // 上部の照合結果と最下部のリセットボタンが常に画面内に残るようにする。
+  // キーボードが出ると表示領域が縮む。app を可視領域（キーボードの上）に
+  // ぴったり合わせ、上部の照合結果と最下部のリセットが常に画面内に残るようにする。
   const appEl = document.querySelector('.app');
   function fitToViewport() {
     const vv = window.visualViewport;
     if (!vv || !appEl) return;
     appEl.style.height = vv.height + 'px';
-    appEl.style.transform = `translateY(${vv.offsetTop}px)`;
+    appEl.style.top    = vv.offsetTop + 'px';
+    appEl.style.left   = vv.offsetLeft + 'px';
   }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitToViewport);
     window.visualViewport.addEventListener('scroll', fitToViewport);
   }
   window.addEventListener('load', fitToViewport);
+  window.addEventListener('resize', fitToViewport);
   window.addEventListener('orientationchange', () => setTimeout(fitToViewport, 300));
 
   // Ensure audio on first touch
   document.addEventListener('touchstart', ensureAudio, { once: true });
   document.addEventListener('click',      ensureAudio, { once: true });
 
-  // Focus is intentionally NOT set on load (prevents soft keyboard & auto-scroll).
-  // Scans are captured globally via the document keypress listener above.
+  // 起動時にデータA欄へフォーカス（スキャナー入力を受け取るために必要）
+  window.addEventListener('load', () => { elA.focus(); });
 </script>
 </body>
 </html>
