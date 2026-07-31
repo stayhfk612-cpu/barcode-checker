@@ -598,7 +598,7 @@
     <div class="header-title">
       <div class="header-icon">🔍</div>
       <h1>Barcode-Finder</h1>
-      <span class="build-tag" id="buildTag">build&nbsp;2&nbsp;PWA</span>
+      <span class="build-tag" id="buildTag">build&nbsp;3&nbsp;PWA</span>
     </div>
     <div class="step-badge" id="stateBadge">登録</div>
   </header>
@@ -622,11 +622,11 @@
     <div class="mode-toggle" id="modeToggle">
       <button class="mode-btn active" id="modeBtnPart" onclick="setMode('part')" type="button">
         品番抽出照合
-        <span class="mode-btn-sub">4番目の項目で判定</span>
+        <span class="mode-btn-sub">品番を含めばHIT</span>
       </button>
       <button class="mode-btn" id="modeBtnFull" onclick="setMode('full')" type="button">
         全体照合
-        <span class="mode-btn-sub">バーコード全体で判定</span>
+        <span class="mode-btn-sub">登録文字を含めばHIT</span>
       </button>
     </div>
 
@@ -853,8 +853,8 @@
     renderTargets();
     setResult('reg', `${targets.length} / ${MAX_TARGETS}`, '📝', '登録件数');
     statusBar.textContent = mode === 'part'
-      ? '品番抽出照合モード（4番目の項目で判定）'
-      : '全体照合モード（バーコード全体で判定）';
+      ? '品番抽出照合（登録品番を含めばHIT）'
+      : '全体照合（登録文字を含めばHIT）';
     scanInput.focus();
   }
 
@@ -886,8 +886,8 @@
       scanHint.textContent = 'スキャンで登録リストと照合';
       setResult('', '待機中', '⏳', '照合結果');
       statusBar.textContent = compareMode === 'part'
-        ? 'スキャンして検索（品番抽出照合）'
-        : 'スキャンして検索（全体照合）';
+        ? 'スキャンして検索（登録品番を含めばHIT）'
+        : 'スキャンして検索（登録文字を含めばHIT）';
     }
     scanInput.value = '';
     scanInput.focus();
@@ -926,19 +926,25 @@
   }
 
   // ─── 照合（検索） ───
+  // 判定条件：登録した文字（partモード＝品番／fullモード＝登録文字そのもの）が、
+  //           スキャンした文字列の中に「含まれていれば」HIT（部分一致）。
   function searchScan(raw) {
-    const v = (raw || '').trim();
-    if (!v) return;
+    const scanned = (raw || '').trim();
+    if (!scanned) return;
     ensureAudio();
-    const k = keyOf(v);
-    const idx = targets.findIndex(t => keyOf(t) === k);
+
+    const idx = targets.findIndex(t => {
+      const key = keyOf(t);
+      return key && scanned.includes(key);
+    });
 
     if (idx >= 0) {
+      const hitKey = keyOf(targets[idx]);
       setResult('ok', 'HIT', '✓', '照合結果');
       matchDetail.className = 'match-detail ok';
       matchDetail.style.display = 'block';
-      matchDetail.innerHTML = `✓ 一致（登録 ${idx + 1} 番）<br><b>${escapeHtml(k)}</b>`;
-      statusBar.textContent = 'HIT（一致）しました';
+      matchDetail.innerHTML = `✓ 含まれています（登録 ${idx + 1} 番）<br><b>${escapeHtml(hitKey)}</b>`;
+      statusBar.textContent = 'HIT（登録内容を含む）';
       soundOK(); doFlash('ok'); vibrate([60,40,60]);
       const row = targetList.querySelector(`[data-row="${idx}"]`);
       if (row) {
@@ -950,8 +956,8 @@
       setResult('ng', 'NO HIT', '✕', '照合結果');
       matchDetail.className = 'match-detail ng';
       matchDetail.style.display = 'block';
-      matchDetail.innerHTML = `✗ 未登録のバーコードです<br><span class="ng-token">${escapeHtml(k)}</span>`;
-      statusBar.textContent = 'NO HIT（未登録）です';
+      matchDetail.innerHTML = `✗ 登録内容を含みません<br><span class="ng-token">${escapeHtml(scanned)}</span>`;
+      statusBar.textContent = 'NO HIT（該当なし）です';
       soundNG(); doFlash('ng'); vibrate([80,50,80,50,80]);
     }
   }
