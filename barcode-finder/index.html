@@ -598,7 +598,7 @@
     <div class="header-title">
       <div class="header-icon">🔍</div>
       <h1>Barcode-Finder</h1>
-      <span class="build-tag" id="buildTag">build&nbsp;3&nbsp;PWA</span>
+      <span class="build-tag" id="buildTag">build&nbsp;4&nbsp;PWA</span>
     </div>
     <div class="step-badge" id="stateBadge">登録</div>
   </header>
@@ -626,7 +626,7 @@
       </button>
       <button class="mode-btn" id="modeBtnFull" onclick="setMode('full')" type="button">
         全体照合
-        <span class="mode-btn-sub">登録文字を含めばHIT</span>
+        <span class="mode-btn-sub">完全一致でHIT</span>
       </button>
     </div>
 
@@ -854,7 +854,7 @@
     setResult('reg', `${targets.length} / ${MAX_TARGETS}`, '📝', '登録件数');
     statusBar.textContent = mode === 'part'
       ? '品番抽出照合（登録品番を含めばHIT）'
-      : '全体照合（登録文字を含めばHIT）';
+      : '全体照合（完全一致でHIT）';
     scanInput.focus();
   }
 
@@ -887,7 +887,7 @@
       setResult('', '待機中', '⏳', '照合結果');
       statusBar.textContent = compareMode === 'part'
         ? 'スキャンして検索（登録品番を含めばHIT）'
-        : 'スキャンして検索（登録文字を含めばHIT）';
+        : 'スキャンして検索（完全一致でHIT）';
     }
     scanInput.value = '';
     scanInput.focus();
@@ -926,8 +926,9 @@
   }
 
   // ─── 照合（検索） ───
-  // 判定条件：登録した文字（partモード＝品番／fullモード＝登録文字そのもの）が、
-  //           スキャンした文字列の中に「含まれていれば」HIT（部分一致）。
+  // 判定条件：
+  //   ・品番抽出照合(part)：登録品番がスキャン文字列に「含まれていれば」HIT（部分一致）
+  //   ・全体照合(full)    ：登録文字とスキャン文字が「完全に一致」すればHIT
   function searchScan(raw) {
     const scanned = (raw || '').trim();
     if (!scanned) return;
@@ -935,7 +936,9 @@
 
     const idx = targets.findIndex(t => {
       const key = keyOf(t);
-      return key && scanned.includes(key);
+      if (!key) return false;
+      if (compareMode === 'full') return scanned === key;   // 全体照合：完全一致
+      return scanned.includes(key);                          // 品番抽出照合：含む
     });
 
     if (idx >= 0) {
