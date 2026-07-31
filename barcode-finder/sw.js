@@ -1,7 +1,7 @@
 // ─── Barcode-Finder Service Worker ───
 // キャッシュ名のバージョンを上げると、古いキャッシュは自動的に破棄されます。
 // HTML はネットワーク優先（オンライン時は常に最新を取得）＝古い版が残りにくい設計。
-const CACHE = 'finder-v3';
+const CACHE = 'finder-v4';
 
 const PRECACHE = [
   './',
